@@ -53,7 +53,7 @@ class AccordionBot:
         with urllib.request.urlopen(url) as response:
             return self._calculate_hash(response.read())
 
-    def _add_new_payload(self, payload_hash, update):
+    def _store_new_payload(self, payload_hash, update):
         chat_id = self._chat_id_str(update.message.chat_id)
         history_record = self._create_payload_record(update)
         self._payloads[chat_id][payload_hash] = history_record
@@ -69,7 +69,7 @@ class AccordionBot:
             bot.send_message(chat_id=update.message.chat_id, text=random_reaction,
                              reply_to_message_id=update.message.message_id)
 
-    def _start_bot(self, bot, update):
+    def _on_start_command(self, bot, update):
         chat_id = self._chat_id_str(update.message.chat_id)
         self._payloads[chat_id] = self._history_storage.load_records(chat_id=chat_id)
         bot.send_message(chat_id=update.message.chat_id, text='Affirmative')
@@ -85,12 +85,12 @@ class AccordionBot:
             if self._is_retro(url_hash, update):
                 self._on_retro(bot, update, url_hash)
             else:
-                self._add_new_payload(url_hash, update)
+                self._store_new_payload(url_hash, update)
                 payload_hash = self._url_payload_hash(url)
                 if self._is_retro(payload_hash, update):
                     self._on_retro(bot, update, payload_hash)
                 else:
-                    self._add_new_payload(payload_hash, update)
+                    self._store_new_payload(payload_hash, update)
 
     def _on_file(self, bot, update):
         if self._chat_id_str(update.message.chat_id) not in self._payloads:
@@ -106,13 +106,13 @@ class AccordionBot:
         if self._is_retro(payload_hash, update):
             self._on_retro(bot, update, payload_hash)
         else:
-            self._add_new_payload(payload_hash, update)
+            self._store_new_payload(payload_hash, update)
 
     def run_bot(self):
         updater = Updater(token=self._token)
         dispatcher = updater.dispatcher
 
-        start_handler = CommandHandler('RunAccordion', self._start_bot)
+        start_handler = CommandHandler('RunAccordion', self._on_start_command)
         text_handler = MessageHandler(Filters.text, self._on_text)
         file_handler = MessageHandler(Filters.photo | Filters.document, self._on_file)
 
