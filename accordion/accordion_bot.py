@@ -6,6 +6,9 @@ from accordion.history_storage import FileHistoryStorage
 from telegram.ext import (CommandHandler, MessageHandler, Filters, Updater)
 
 
+DEFAULT_ACCORDION_STICKER = 'CAADAgADVBQAAkKvaQAB9_XwxzyijyEC'
+
+
 class ContentHandler:
 
     def __init__(self):
@@ -21,11 +24,16 @@ class ContentHandler:
 
 class AccordionBot:
 
-    def __init__(self, token, reactions_file, storage=FileHistoryStorage()):
+    def __init__(self, token, reactions_file=None, sticker=DEFAULT_ACCORDION_STICKER,
+                 storage=FileHistoryStorage()):
         self._token = token
         self._payloads = {}
         self._history_storage = storage
-        self._reactions = self._load_lines(reactions_file)
+        if reactions_file:
+            self._reactions = self._load_lines(reactions_file)
+        else:
+            self._reactions = []
+        self._sticker = sticker
 
     def _chat_id_str(self, id):
         return '%02X' % (id & 0xFFFFFFFF)
@@ -41,7 +49,8 @@ class AccordionBot:
     def _create_payload_record(self, update):
         return {
             'originator_message_id': update.message.message_id,
-            'originator_username': update.message.from_user.username
+            'originator_user_name': update.message.from_user.username,
+            'originator_user_id': update.message.from_user.id
         }
 
     def _calculate_hash(self, payload):
@@ -67,6 +76,9 @@ class AccordionBot:
         if len(self._reactions) > 0:
             random_reaction = random.choice(self._reactions)
             bot.send_message(chat_id=update.message.chat_id, text=random_reaction,
+                             reply_to_message_id=update.message.message_id)
+        else:
+            bot.send_sticker(chat_id=update.message.chat_id, sticker=self._sticker,
                              reply_to_message_id=update.message.message_id)
 
     def _on_start_command(self, bot, update):
