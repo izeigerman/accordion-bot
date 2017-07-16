@@ -36,7 +36,6 @@ class AccordionBot:
     def __init__(self, token, reactions_file=None, stickers_file=None,
                  stickers=DEFAULT_ACCORDION_STICKERS, storage=FileHistoryStorage()):
         self._token = token
-        self._history = {}
         self._history_storage = storage
         self._reactions = []
         self._stickers = []
@@ -77,12 +76,12 @@ class AccordionBot:
     def _store_new_record(self, payload_hash, update):
         chat_id = self._chat_id_str(update.message.chat_id)
         history_record = self._create_history_record(update)
-        self._history[chat_id][payload_hash] = history_record
         self._history_storage.add_record(chat_id=chat_id, payload_hash=payload_hash,
                                          data=history_record)
 
     def _find_retro(self, new_hash, update):
-        return self._history[self._chat_id_str(update.message.chat_id)].get(new_hash)
+        chat_id = self._chat_id_str(update.message.chat_id)
+        return self._history_storage.get_record(chat_id=chat_id, payload_hash=new_hash)
 
     def _on_retro(self, bot, update, retro_hash, retro_record):
         if len(self._reactions) > 0:
@@ -96,15 +95,7 @@ class AccordionBot:
         bot.send_message(chat_id=update.message.chat_id, text='Proof',
                          reply_to_message_id=retro_record['originator_message_id'])
 
-    def _on_start_command(self, bot, update):
-        chat_id = self._chat_id_str(update.message.chat_id)
-        self._history[chat_id] = self._history_storage.load_records(chat_id=chat_id)
-        bot.send_message(chat_id=update.message.chat_id, text='Affirmative')
-
     def _on_text(self, bot, update):
-        if self._chat_id_str(update.message.chat_id) not in self._history:
-            return
-
         url = re.search('(?P<url>https?://[^\s]+)', update.message.text)
         if url:
             url = url.group('url')
@@ -123,9 +114,6 @@ class AccordionBot:
                     self._store_new_record(payload_hash, update)
 
     def _on_file(self, bot, update):
-        if self._chat_id_str(update.message.chat_id) not in self._history:
-            return
-
         if update.message.document:
             document = bot.get_file(update.message.document.file_id)
         else:
@@ -144,12 +132,10 @@ class AccordionBot:
         updater = Updater(token=self._token)
         dispatcher = updater.dispatcher
 
-        start_handler = CommandHandler('RunAccordion', self._on_start_command)
         text_handler = MessageHandler(Filters.text, self._on_text)
         file_handler = MessageHandler(Filters.photo | Filters.document, self._on_file)
 
         dispatcher.add_handler(file_handler)
         dispatcher.add_handler(text_handler)
-        dispatcher.add_handler(start_handler)
 
         updater.start_polling()
