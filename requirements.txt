@@ -1,1 +1,2 @@
 python-telegram-bot>=6.1.0
+imagehash>=3.4

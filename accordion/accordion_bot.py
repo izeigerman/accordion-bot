@@ -3,7 +3,9 @@ import urllib.request
 import random
 import re
 from accordion.history_storage import FileHistoryStorage
-from telegram.ext import (CommandHandler, MessageHandler, Filters, Updater)
+from telegram.ext import (MessageHandler, Filters, Updater)
+from PIL import Image
+import imagehash
 
 
 DEFAULT_ACCORDION_STICKERS = [
@@ -22,9 +24,36 @@ class ContentHandler:
 
     def __init__(self):
         self._content = None
+        self._current_pos = 0
 
     def write(self, data):
         self._content = data
+        self._current_pos = 0
+
+    def tell(self):
+        return self._current_pos
+
+    def seek(self, pos):
+        self._current_pos = pos
+
+    def read(self, bytes=None):
+        if self._current_pos >= len(self._content):
+            return None
+        if bytes:
+            new_pos = self._current_pos + bytes
+            if new_pos > len(self._content):
+                new_pos = len(self._content)
+            result = self._content[self._current_pos:new_pos]
+            self._current_pos = new_pos
+            return result
+        else:
+            new_pos = len(self._content)
+            result =  self._content[self._current_pos:]
+            self._current_pos = new_pos
+            return result
+
+    def close(self):
+        pass
 
     @property
     def content(self):
@@ -69,9 +98,9 @@ class AccordionBot:
         sha.update(payload)
         return sha.hexdigest()
 
-    def _url_payload_hash(self, url):
+    def _url_payload(self, url):
         with urllib.request.urlopen(url) as response:
-            return self._calculate_hash(response.read())
+            return response.read()
 
     def _store_new_record(self, payload_hash, update):
         chat_id = self._chat_id_str(update.message.chat_id)
@@ -82,6 +111,17 @@ class AccordionBot:
     def _find_retro(self, new_hash, update):
         chat_id = self._chat_id_str(update.message.chat_id)
         return self._history_storage.get_record(chat_id=chat_id, payload_hash=new_hash)
+
+    def _calculate_payload_hash(self, payload):
+        if isinstance(payload, ContentHandler):
+            handler = payload
+        else:
+            handler = ContentHandler()
+            handler.write(payload)
+        try:
+            return str(imagehash.average_hash(Image.open(handler), hash_size=12))
+        except:
+            return self._calculate_hash(handler.content)
 
     def _on_retro(self, bot, update, retro_hash, retro_record):
         if len(self._reactions) > 0:
@@ -105,7 +145,8 @@ class AccordionBot:
                 self._on_retro(bot, update, url_hash, retro_record=url_retro_record)
             else:
                 self._store_new_record(url_hash, update)
-                payload_hash = self._url_payload_hash(url)
+                payload = self._url_payload(url)
+                payload_hash = self._calculate_payload_hash(payload)
                 payload_retro_record = self._find_retro(payload_hash, update)
                 if payload_retro_record:
                     self._on_retro(bot, update, payload_hash,
@@ -120,7 +161,7 @@ class AccordionBot:
             document = bot.get_file(update.message.photo[-1].file_id)
         handler = ContentHandler()
         document.download(out=handler)
-        payload_hash = self._calculate_hash(handler.content)
+        payload_hash = self._calculate_payload_hash(handler)
         payload_retro_record = self._find_retro(payload_hash, update)
         if payload_retro_record:
             self._on_retro(bot, update, payload_hash,
