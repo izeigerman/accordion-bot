@@ -119,7 +119,7 @@ class AccordionBot:
             handler = ContentHandler()
             handler.write(payload)
         try:
-            return str(imagehash.average_hash(Image.open(handler), hash_size=12))
+            return str(imagehash.average_hash(Image.open(handler), hash_size=10))
         except:
             return self._calculate_hash(handler.content)
 
