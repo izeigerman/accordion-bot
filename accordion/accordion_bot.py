@@ -3,6 +3,7 @@ import random
 import re
 from accordion.history_storage import FileHistoryStorage
 from accordion.url_hash_provider import YouTubeUrlHashProvider
+from accordion.short_link_resolver import ShortLinkResolver
 from accordion.utils import calculate_hash
 from telegram.ext import (MessageHandler, Filters, Updater)
 from PIL import Image
@@ -82,6 +83,7 @@ class AccordionBot:
         self._url_hash_providers = [
             YouTubeUrlHashProvider()
         ]
+        self._short_link_resolver = ShortLinkResolver()
 
     def _chat_id_str(self, id):
         return '%02X' % (id & 0xFFFFFFFF)
@@ -151,6 +153,8 @@ class AccordionBot:
         urls = self.URL_REGEXP.findall(update.message.text)
         if urls:
             url = urls[0]
+            while self._short_link_resolver.is_short_link(url):
+                url = self._short_link_resolver.resolve_short_link(url)
             url_hash = self._calculate_url_hash(url)
             url_retro_record = self._find_retro(url_hash, update)
             if url_retro_record:

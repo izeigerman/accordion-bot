@@ -1,4 +1,4 @@
-from accordion.utils import calculate_hash
+from accordion.utils import (calculate_hash, normalize_url)
 from urllib.parse import urlparse
 
 class YouTubeUrlHashProvider:
@@ -8,21 +8,15 @@ class YouTubeUrlHashProvider:
         'youtu.be'
     ]
 
-    def _normalize_url(self, url):
-        if not url.startswith('https://'):
-            return 'https://{}'.format(url)
-        else:
-            return url
-
     def is_url_applicable(self, url):
-        parsed_url = urlparse(self._normalize_url(url))
+        parsed_url = urlparse(normalize_url(url, schema='https'))
         for host in self.YOUTUBE_HOSTS:
             if host in parsed_url.netloc:
                 return True
         return False
 
     def calculate_url_hash(self, url):
-        parsed_url = urlparse(self._normalize_url(url))
+        parsed_url = urlparse(normalize_url(url, schema='https'))
         if 'youtu.be' in parsed_url.netloc:
             return calculate_hash(parsed_url.path[1:].encode())
         else:
