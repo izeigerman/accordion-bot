@@ -3,7 +3,6 @@ import json
 from accordion.history_storage import FileHistoryStorage
 
 
-
 def test_file_storage_add_and_return_records(tmp_directory):
     storage = FileHistoryStorage(base_path=tmp_directory)
     payload_hash = 'hash'

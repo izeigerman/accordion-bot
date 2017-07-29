@@ -1,8 +1,9 @@
-import hashlib
 import urllib.request
 import random
 import re
 from accordion.history_storage import FileHistoryStorage
+from accordion.url_hash_provider import YouTubeUrlHashProvider
+from accordion.utils import calculate_hash
 from telegram.ext import (MessageHandler, Filters, Updater)
 from PIL import Image
 import imagehash
@@ -62,6 +63,10 @@ class ContentHandler:
 
 class AccordionBot:
 
+    URL_REGEXP = re.compile(
+        'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+',
+        re.IGNORECASE)
+
     def __init__(self, token, reactions_file=None, stickers_file=None,
                  stickers=DEFAULT_ACCORDION_STICKERS, storage=FileHistoryStorage()):
         self._token = token
@@ -74,6 +79,9 @@ class AccordionBot:
             self._stickers = self._load_lines(stickers_file)
         else:
             self._stickers = stickers
+        self._url_hash_providers = [
+            YouTubeUrlHashProvider()
+        ]
 
     def _chat_id_str(self, id):
         return '%02X' % (id & 0xFFFFFFFF)
@@ -94,9 +102,7 @@ class AccordionBot:
         }
 
     def _calculate_hash(self, payload):
-        sha = hashlib.sha1()
-        sha.update(payload)
-        return sha.hexdigest()
+        return calculate_hash(payload)
 
     def _url_payload(self, url):
         with urllib.request.urlopen(url) as response:
@@ -123,6 +129,12 @@ class AccordionBot:
         except:
             return self._calculate_hash(handler.content)
 
+    def _calculate_url_hash(self, url):
+        for provider in self._url_hash_providers:
+            if provider.is_url_applicable(url):
+                return provider.calculate_url_hash(url)
+        return self._calculate_hash(url.encode())
+
     def _on_retro(self, bot, update, retro_hash, retro_record):
         if len(self._reactions) > 0:
             random_reaction = random.choice(self._reactions)
@@ -136,10 +148,10 @@ class AccordionBot:
                          reply_to_message_id=retro_record['originator_message_id'])
 
     def _on_text(self, bot, update):
-        url = re.search('(?P<url>https?://[^\s]+)', update.message.text)
-        if url:
-            url = url.group('url')
-            url_hash = self._calculate_hash(url.encode())
+        urls = self.URL_REGEXP.findall(update.message.text)
+        if urls:
+            url = urls[0]
+            url_hash = self._calculate_url_hash(url)
             url_retro_record = self._find_retro(url_hash, update)
             if url_retro_record:
                 self._on_retro(bot, update, url_hash, retro_record=url_retro_record)
